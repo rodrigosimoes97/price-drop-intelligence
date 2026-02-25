@@ -228,49 +228,49 @@ class ShopeeDiscoveryProvider(DiscoveryProvider):
             raise
 
         def _fetch_search_api(self, keyword: str, limit: int = 60, newest: int = 0) -> dict[str, Any]:
-        """
-        Busca itens via endpoint JSON usado pelo front do Shopee Search.
-        """
-        api = "https://shopee.com.br/api/v4/search/search_items"
-        params = {
-            "by": "sales",
-            "keyword": keyword,
-            "limit": str(limit),
-            "newest": str(newest),
-            "order": "desc",
-            "page_type": "search",
-            "scenario": "PAGE_GLOBAL_SEARCH",
-            "version": "2",
-        }
-
-        headers = {
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-            "Referer": f"https://shopee.com.br/search?keyword={keyword}",
-            # use UA "real" aqui — Shopee bloqueia UA muito “bot”
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36",
-        }
-
-        # Reusa seu rate limit + breaker
-        domain = "shopee.com.br"
-        if self.breaker.is_open(domain):
-            raise RuntimeError("circuit_open")
-        self.rate_limiter.wait(domain)
-
-        def do_req() -> dict[str, Any]:
-            if requests is None:
-                raise RuntimeError("requests_required_for_api")
-            res = requests.get(api, params=params, timeout=self.timeout, headers=headers)
-            res.raise_for_status()
-            return res.json()
-
-        try:
-            data = retry_with_backoff(do_req, retries=self.retries, base_delay=self.backoff)
-            self.breaker.record_success(domain)
-            return data
-        except Exception:
-            self.breaker.record_failure(domain)
-            raise
+            """
+            Busca itens via endpoint JSON usado pelo front do Shopee Search.
+            """
+            api = "https://shopee.com.br/api/v4/search/search_items"
+            params = {
+                "by": "sales",
+                "keyword": keyword,
+                "limit": str(limit),
+                "newest": str(newest),
+                "order": "desc",
+                "page_type": "search",
+                "scenario": "PAGE_GLOBAL_SEARCH",
+                "version": "2",
+            }
+    
+            headers = {
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+                "Referer": f"https://shopee.com.br/search?keyword={keyword}",
+                # use UA "real" aqui — Shopee bloqueia UA muito “bot”
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36",
+            }
+    
+            # Reusa seu rate limit + breaker
+            domain = "shopee.com.br"
+            if self.breaker.is_open(domain):
+                raise RuntimeError("circuit_open")
+            self.rate_limiter.wait(domain)
+    
+            def do_req() -> dict[str, Any]:
+                if requests is None:
+                    raise RuntimeError("requests_required_for_api")
+                res = requests.get(api, params=params, timeout=self.timeout, headers=headers)
+                res.raise_for_status()
+                return res.json()
+    
+            try:
+                data = retry_with_backoff(do_req, retries=self.retries, base_delay=self.backoff)
+                self.breaker.record_success(domain)
+                return data
+            except Exception:
+                self.breaker.record_failure(domain)
+                raise
 
     def _parse_search_api_items(self, data: dict[str, Any], category: DiscoveryCategory, now, expires) -> list[DiscoveredProduct]:
         out: list[DiscoveredProduct] = []
