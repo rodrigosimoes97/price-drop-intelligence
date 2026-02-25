@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset='utf-8'><title>Price Drop Intelligence</title>
+<style>body{font-family:Arial;padding:20px}.card{border:1px solid #ddd;padding:12px;border-radius:8px;margin:8px 0}</style></head>
+<body><h1>Price Drop Intelligence</h1><div id='root'></div>
+<script>
+fetch('latest.json').then(r=>r.json()).then(data=>{
+ const root=document.getElementById('root');
+ const summary=document.createElement('p');
+ summary.textContent=`Run ${data.run.run_id}: ${data.run.alerts_sent} alertas`;
+ root.appendChild(summary);
+ (data.alerts||[]).forEach(a=>{
+   const d=document.createElement('div');d.className='card';
+   d.innerHTML=`<b>${a.product_id}</b><br>Atual: ${a.current_price} ${a.currency}<br>Queda: ${a.drop_percent.toFixed(2)}%`;
+   root.appendChild(d);
+ });
+});
+</script></body></html>

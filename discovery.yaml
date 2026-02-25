@@ -1,0 +1,48 @@
+{
+  "shopee": {
+    "enabled": true,
+    "country": "BR",
+    "currency": "BRL",
+    "max_active_products": 100,
+    "ttl_hours": 72,
+    "categories": [
+      {
+        "name": "electronics",
+        "url": "https://shopee.com.br/melhores-eletronicos",
+        "tags": ["electronics"],
+        "take": 40
+      },
+      {
+        "name": "home_kitchen",
+        "url": "https://shopee.com.br/melhores-casa-cozinha",
+        "tags": ["home", "kitchen"],
+        "take": 40
+      },
+      {
+        "name": "health_fitness",
+        "url": "https://shopee.com.br/melhores-saude-fitness",
+        "tags": ["health", "fitness"],
+        "take": 40
+      }
+    ],
+    "filters": {
+      "min_price": 25.0,
+      "max_price": 5000.0,
+      "min_sold": 50,
+      "min_rating": 4.4,
+      "min_rating_count": 50,
+      "exclude_keywords": ["capa", "pelicula", "adesivo", "brinde"]
+    },
+    "http": {
+      "timeout_seconds": 15,
+      "retries": 3,
+      "backoff_base_seconds": 1.2,
+      "rate_limit_per_domain_seconds": 2.0,
+      "user_agent": "price-drop-intelligence-bot/1.0"
+    },
+    "affiliate": {
+      "mode": "template",
+      "template": "{url}"
+    }
+  }
+}

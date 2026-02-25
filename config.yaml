@@ -1,0 +1,15 @@
+{
+  "drop_percent_min": 10,
+  "drop_amount_min": {
+    "BRL": 20,
+    "USD": 10,
+    "GBP": 10
+  },
+  "lookback_days": 30,
+  "reference_mode": "rolling_max",
+  "cooldown_hours": 24,
+  "realert_extra_drop_percent": 5,
+  "min_price_threshold": 5,
+  "max_price_threshold": 50000,
+  "site_enabled": true
+}
