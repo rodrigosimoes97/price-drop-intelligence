@@ -8,19 +8,19 @@
     "categories": [
       {
         "name": "electronics",
-        "url": "https://shopee.com.br/melhores-eletronicos",
+        "url": "https://shopee.com.br/search?keyword=fone%20bluetooth&sortBy=sales&order=desc&page=0",
         "tags": ["electronics"],
         "take": 40
       },
       {
         "name": "home_kitchen",
-        "url": "https://shopee.com.br/melhores-casa-cozinha",
+        "url": "https://shopee.com.br/search?keyword=air%20fryer&sortBy=sales&order=desc",
         "tags": ["home", "kitchen"],
         "take": 40
       },
       {
         "name": "health_fitness",
-        "url": "https://shopee.com.br/melhores-saude-fitness",
+        "url": "https://shopee.com.br/search?keyword=balan%C3%A7a%20digital&sortBy=sales&order=desc",
         "tags": ["health", "fitness"],
         "take": 40
       }
