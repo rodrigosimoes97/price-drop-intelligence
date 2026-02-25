@@ -176,6 +176,106 @@ class ShopeeDiscoveryProvider(DiscoveryProvider):
         self.backoff = float((config.http or {}).get("backoff_base_seconds", 1.2))
         self.ua = str((config.http or {}).get("user_agent", "price-drop-intelligence-bot/1.0"))
 
+    def _fetch_search_api(self, keyword: str, limit: int = 60, newest: int = 0) -> dict[str, Any]:
+        api = "https://shopee.com.br/api/v4/search/search_items"
+        params = {
+            "by": "sales",
+            "keyword": keyword,
+            "limit": str(limit),
+            "newest": str(newest),
+            "order": "desc",
+            "page_type": "search",
+            "scenario": "PAGE_GLOBAL_SEARCH",
+            "version": "2",
+        }
+        headers = {
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+            "Referer": f"https://shopee.com.br/search?keyword={keyword}",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36",
+        }
+
+        domain = "shopee.com.br"
+        if self.breaker.is_open(domain):
+            raise RuntimeError("circuit_open")
+        self.rate_limiter.wait(domain)
+
+        def do_req() -> dict[str, Any]:
+            if requests is None:
+                raise RuntimeError("requests_required_for_api")
+            res = requests.get(api, params=params, timeout=self.timeout, headers=headers)
+            res.raise_for_status()
+            return res.json()
+
+        try:
+            data = retry_with_backoff(do_req, retries=self.retries, base_delay=self.backoff)
+            self.breaker.record_success(domain)
+            return data
+        except Exception:
+            self.breaker.record_failure(domain)
+            raise
+
+    def _parse_search_api_items(self, data: dict[str, Any], category: DiscoveryCategory, now, expires) -> list[DiscoveredProduct]:
+        out: list[DiscoveredProduct] = []
+        items = data.get("items") or []
+        for it in items:
+            basic = (it or {}).get("item_basic") or {}
+            if not basic:
+                continue
+
+            shop_id = basic.get("shopid")
+            item_id = basic.get("itemid")
+            title = str(basic.get("name") or "").strip()
+            if not title:
+                continue
+
+            raw_price = basic.get("price") or basic.get("price_min") or basic.get("price_max")
+            price = None
+            if isinstance(raw_price, (int, float)) and raw_price > 0:
+                price = float(raw_price) / 100000.0
+
+            sold = int(basic.get("historical_sold") or basic.get("sold") or 0)
+
+            rating_block = basic.get("item_rating") or {}
+            rating = None
+            rating_count = 0
+            if isinstance(rating_block, dict):
+                rs = rating_block.get("rating_star")
+                if isinstance(rs, (int, float)):
+                    rating = float(rs)
+                rating_count = int(rating_block.get("rating_count") or 0)
+
+            canonical = None
+            if shop_id and item_id:
+                canonical = f"https://shopee.com.br/product/{shop_id}/{item_id}"
+
+            canonical, sid, iid = normalize_shopee_url(canonical or category.url)
+            pid = product_id_from(self.config.country, sid, iid, canonical)
+
+            out.append(
+                DiscoveredProduct(
+                    id=pid,
+                    store="shopee",
+                    country=self.config.country,
+                    currency=self.config.currency,
+                    canonical_url=canonical,
+                    url=canonical,
+                    title=title[:180],
+                    tags=list(dict.fromkeys([*category.tags, "bestseller", category.name])),
+                    source=f"api_search:{category.name}",
+                    discovered_at_utc=now,
+                    expires_at_utc=expires,
+                    score=0.0,
+                    price=price,
+                    shop_id=sid,
+                    item_id=iid,
+                    sold=sold,
+                    rating=rating,
+                    rating_count=rating_count,
+                )
+            )
+        return out
+
     def discover(self) -> tuple[list[DiscoveredProduct], dict[str, int], list[str]]:
         discovered: list[DiscoveredProduct] = []
         strategy_stats = {"json_state": 0, "json_ld": 0, "html": 0, "api_search": 0}
@@ -343,14 +443,13 @@ class ShopeeDiscoveryProvider(DiscoveryProvider):
         if items:
             return items, stats
 
-        # ✅ Fallback para /search?keyword=... via API (JS-rendered pages)
         keyword = _extract_keyword(category.url)
         if keyword:
             data = self._fetch_search_api(keyword=keyword, limit=max(60, category.take))
             api_items = self._parse_search_api_items(data, category, now, expires)
             return api_items, {"json_state": 0, "json_ld": 0, "html": 0, "api_search": len(api_items)}
 
-        return [], {"json_state": 0, "json_ld": 0, "html": 0}
+        return [], {"json_state": 0, "json_ld": 0, "html": 0, "api_search": 0}
 
     def _parse_json_state(self, html: str, category: DiscoveryCategory, now, expires) -> tuple[list[DiscoveredProduct], dict[str, int]]:
         candidates = re.findall(r"<script[^>]*>(\{.*?\})</script>", html, flags=re.DOTALL)
