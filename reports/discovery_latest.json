@@ -1,0 +1,28 @@
+{
+  "run_id": "ae6ea923-e306-4495-a61c-de6b71f9dc52",
+  "store": "shopee",
+  "country": "BR",
+  "dry_run": true,
+  "categories": [
+    "electronics",
+    "home_kitchen",
+    "health_fitness"
+  ],
+  "collected": 0,
+  "saved": 0,
+  "inserted": 0,
+  "updated": 0,
+  "expired": 0,
+  "strategy_stats": {
+    "json_state": 0,
+    "json_ld": 0,
+    "html": 0
+  },
+  "errors": [
+    "category=electronics error=URLError",
+    "category=home_kitchen error=URLError",
+    "category=health_fitness error=URLError"
+  ],
+  "log_file": "logs/discovery_20260225_175906.log",
+  "top_items": []
+}

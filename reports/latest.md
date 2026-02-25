@@ -1,10 +1,10 @@
 # Price Drop Intelligence Report
 
-- Run ID: `5357914b-6f37-4ab7-b30c-eff8b490aec9`
-- Timestamp UTC: `2026-02-25T14:56:57.337034+00:00`
-- Products: **2**
+- Run ID: `101fe88b-6c39-4a18-8483-fe2b19d153f7`
+- Timestamp UTC: `2026-02-25T17:59:28.312266+00:00`
+- Products: **0**
 - Snapshots OK: **0**
-- Snapshots Error: **2**
+- Snapshots Error: **0**
 - Alerts: **0**
 
 ## Top quedas
@@ -14,4 +14,4 @@
 
 ## Erros por provider
 
-- `generic_html`: 2
+- Nenhum erro

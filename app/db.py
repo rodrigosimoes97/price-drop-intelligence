@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import median
 
-from app.models import PriceSnapshot, Product
+from app.models import DiscoveredProduct, PriceSnapshot, Product
 
 DB_PATH = Path("data/prices.db")
 
@@ -73,34 +74,186 @@ class Database:
             );
             """
         )
+        self._ensure_product_columns()
         self.conn.commit()
 
+    def _ensure_product_columns(self) -> None:
+        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(products)").fetchall()}
+        additions = {
+            "canonical_url": "TEXT",
+            "image_url": "TEXT",
+            "shop_id": "TEXT",
+            "item_id": "TEXT",
+            "sold": "INTEGER",
+            "rating": "REAL",
+            "rating_count": "INTEGER",
+            "source": "TEXT",
+            "discovered_at_utc": "TEXT",
+            "expires_at_utc": "TEXT",
+            "score": "REAL",
+        }
+        for col, ctype in additions.items():
+            if col not in columns:
+                self.conn.execute(f"ALTER TABLE products ADD COLUMN {col} {ctype}")
+
     def upsert_product(self, p: Product) -> None:
+        now_iso = datetime.now(tz=timezone.utc).isoformat()
         self.conn.execute(
             """
-            INSERT INTO products (id, country, store, url, currency, title_hint, tags, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO products (id, country, store, url, canonical_url, currency, title_hint, tags, source, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 country=excluded.country,
                 store=excluded.store,
                 url=excluded.url,
+                canonical_url=excluded.canonical_url,
                 currency=excluded.currency,
                 title_hint=excluded.title_hint,
                 tags=excluded.tags,
+                source=excluded.source,
                 updated_at=excluded.updated_at
             """,
-            (
-                p.id,
-                p.country,
-                p.store,
-                p.url,
-                p.currency,
-                p.title_hint,
-                ",".join(p.tags),
-                datetime.now(tz=timezone.utc).isoformat(),
-            ),
+            (p.id, p.country, p.store, p.url, p.url, p.currency, p.title_hint, ",".join(p.tags), "watchlist", now_iso),
         )
         self.conn.commit()
+
+    def upsert_products(self, products: list[DiscoveredProduct]) -> tuple[int, int]:
+        inserted = 0
+        updated = 0
+        for p in products:
+            existing = self.conn.execute("SELECT id FROM products WHERE id=?", (p.id,)).fetchone()
+            self.conn.execute(
+                """
+                INSERT INTO products (
+                    id, country, store, url, canonical_url, currency, title_hint, tags, source,
+                    image_url, shop_id, item_id, sold, rating, rating_count,
+                    discovered_at_utc, expires_at_utc, score, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    country=excluded.country,
+                    store=excluded.store,
+                    url=excluded.url,
+                    canonical_url=excluded.canonical_url,
+                    currency=excluded.currency,
+                    title_hint=excluded.title_hint,
+                    tags=excluded.tags,
+                    source=excluded.source,
+                    image_url=excluded.image_url,
+                    shop_id=excluded.shop_id,
+                    item_id=excluded.item_id,
+                    sold=excluded.sold,
+                    rating=excluded.rating,
+                    rating_count=excluded.rating_count,
+                    discovered_at_utc=excluded.discovered_at_utc,
+                    expires_at_utc=excluded.expires_at_utc,
+                    score=excluded.score,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    p.id,
+                    p.country,
+                    p.store,
+                    p.url,
+                    p.canonical_url,
+                    p.currency,
+                    p.title,
+                    ",".join(p.tags),
+                    p.source,
+                    p.image_url,
+                    p.shop_id,
+                    p.item_id,
+                    p.sold,
+                    p.rating,
+                    p.rating_count,
+                    p.discovered_at_utc.isoformat(),
+                    p.expires_at_utc.isoformat(),
+                    p.score,
+                    datetime.now(tz=timezone.utc).isoformat(),
+                ),
+            )
+            if existing:
+                updated += 1
+            else:
+                inserted += 1
+
+            if p.price is not None:
+                self.insert_snapshot(
+                    PriceSnapshot(
+                        product_id=p.id,
+                        timestamp_utc=p.discovered_at_utc,
+                        price=p.price,
+                        currency=p.currency,
+                        in_stock=True,
+                        title=p.title,
+                        source="discovery",
+                        raw={"source": p.source},
+                    )
+                )
+        self.conn.commit()
+        return inserted, updated
+
+    def expire_products(self, store: str, now_utc: datetime, keep_ids: set[str], ttl_hours: int) -> int:
+        threshold = (now_utc - timedelta(hours=ttl_hours)).isoformat()
+        sql = """
+        UPDATE products
+        SET expires_at_utc=?
+        WHERE store=?
+          AND id NOT IN ({placeholders})
+          AND (expires_at_utc IS NULL OR expires_at_utc > ?)
+          AND (discovered_at_utc IS NULL OR discovered_at_utc <= ?)
+        """
+        ids = list(keep_ids) or ["__none__"]
+        formatted = sql.format(placeholders=",".join("?" for _ in ids))
+        params = [now_utc.isoformat(), store, *ids, now_utc.isoformat(), threshold]
+        cur = self.conn.execute(formatted, params)
+        self.conn.commit()
+        return cur.rowcount
+
+    def get_active_products(self, store: str | None, country: str | None, now_utc: datetime) -> list[Product]:
+        clauses = ["(expires_at_utc IS NULL OR expires_at_utc > ?)"]
+        params: list[str] = [now_utc.isoformat()]
+        if store:
+            clauses.append("store=?")
+            params.append(store)
+        if country:
+            clauses.append("country=?")
+            params.append(country)
+
+        rows = self.conn.execute(
+            f"""
+            SELECT id, country, store, url, currency, title_hint, tags
+            FROM products
+            WHERE {' AND '.join(clauses)}
+            ORDER BY COALESCE(score,0) DESC, COALESCE(discovered_at_utc, updated_at) DESC
+            """,
+            params,
+        ).fetchall()
+        return [
+            Product(
+                id=r["id"],
+                country=r["country"],
+                store=r["store"],
+                url=r["url"],
+                currency=r["currency"],
+                title_hint=r["title_hint"],
+                tags=(r["tags"].split(",") if r["tags"] else []),
+            )
+            for r in rows
+        ]
+
+    def trim_active_products(self, store: str, country: str, max_active: int) -> int:
+        rows = self.conn.execute(
+            """
+            SELECT id FROM products
+            WHERE store=? AND country=? AND (expires_at_utc IS NULL OR expires_at_utc > ?)
+            ORDER BY COALESCE(score,0) DESC, COALESCE(discovered_at_utc, updated_at) DESC
+            """,
+            (store, country, datetime.now(tz=timezone.utc).isoformat()),
+        ).fetchall()
+        if len(rows) <= max_active:
+            return 0
+        keep = {r["id"] for r in rows[:max_active]}
+        return self.expire_products(store=store, now_utc=datetime.now(tz=timezone.utc), keep_ids=keep, ttl_hours=0)
 
     def insert_snapshot(self, s: PriceSnapshot) -> None:
         self.conn.execute(
@@ -119,7 +272,7 @@ class Database:
                 s.source,
                 s.status,
                 s.error,
-                str(s.raw),
+                json.dumps(s.raw, ensure_ascii=False),
             ),
         )
         self.conn.commit()
@@ -158,16 +311,7 @@ class Database:
             (product_id,),
         ).fetchone()
 
-    def insert_alert(
-        self,
-        product_id: str,
-        current_price: float,
-        reference_price: float | None,
-        drop_percent: float,
-        drop_amount: float,
-        reason: str,
-        run_id: str,
-    ) -> None:
+    def insert_alert(self, product_id: str, current_price: float, reference_price: float | None, drop_percent: float, drop_amount: float, reason: str, run_id: str) -> None:
         self.conn.execute(
             """
             INSERT INTO alerts (product_id, timestamp_utc, current_price, reference_price, drop_percent, drop_amount, reason, run_id)
@@ -196,15 +340,7 @@ class Database:
         )
         self.conn.commit()
 
-    def update_run_end(
-        self,
-        run_id: str,
-        finished_at: str,
-        snapshots_ok: int,
-        snapshots_error: int,
-        alerts_sent: int,
-        errors_json: str,
-    ) -> None:
+    def update_run_end(self, run_id: str, finished_at: str, snapshots_ok: int, snapshots_error: int, alerts_sent: int, errors_json: str) -> None:
         self.conn.execute(
             """
             UPDATE runs

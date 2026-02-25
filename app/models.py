@@ -27,6 +27,29 @@ class Product:
 
 
 @dataclass(slots=True)
+class DiscoveredProduct:
+    id: str
+    store: str
+    country: str
+    currency: str
+    canonical_url: str
+    url: str
+    title: str
+    tags: list[str]
+    source: str
+    discovered_at_utc: datetime
+    expires_at_utc: datetime
+    score: float
+    price: float | None = None
+    image_url: str | None = None
+    shop_id: str | None = None
+    item_id: str | None = None
+    sold: int | None = None
+    rating: float | None = None
+    rating_count: int | None = None
+
+
+@dataclass(slots=True)
 class PriceSnapshot:
     product_id: str
     timestamp_utc: datetime

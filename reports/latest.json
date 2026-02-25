@@ -1,17 +1,16 @@
 {
   "run": {
-    "run_id": "5357914b-6f37-4ab7-b30c-eff8b490aec9",
-    "started_at": "2026-02-25T14:56:53.669657+00:00",
-    "finished_at": "2026-02-25T14:56:57.336730+00:00",
+    "run_id": "101fe88b-6c39-4a18-8483-fe2b19d153f7",
+    "started_at": "2026-02-25T17:59:28.305258+00:00",
+    "finished_at": "2026-02-25T17:59:28.311860+00:00",
     "mode": "dry",
-    "total_products": 2,
+    "source": "db",
+    "total_products": 0,
     "snapshots_ok": 0,
-    "snapshots_error": 2,
+    "snapshots_error": 0,
     "alerts_sent": 0,
-    "log_file": "logs/run_20260225_145653.log"
+    "log_file": "logs/run_20260225_175928.log"
   },
   "alerts": [],
-  "errors_by_provider": {
-    "generic_html": 2
-  }
+  "errors_by_provider": {}
 }

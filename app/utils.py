@@ -60,9 +60,9 @@ def utc_now() -> datetime:
     return datetime.now(tz=timezone.utc)
 
 
-def setup_logging(debug: bool = False) -> Path:
+def setup_logging(debug: bool = False, prefix: str = "run") -> Path:
     ts = utc_now().strftime("%Y%m%d_%H%M%S")
-    log_path = Path("logs") / f"run_{ts}.log"
+    log_path = Path("logs") / f"{prefix}_{ts}.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     level = logging.DEBUG if debug else logging.INFO

@@ -4,9 +4,6 @@ import argparse
 import json
 import logging
 from collections import Counter
-from dataclasses import asdict
-from datetime import timezone
-from pathlib import Path
 from uuid import uuid4
 
 from app.db import Database
@@ -23,6 +20,7 @@ LOGGER = logging.getLogger(__name__)
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Price drop monitoring")
     p.add_argument("--mode", choices=["live", "dry"], default="dry")
+    p.add_argument("--source", choices=["auto", "watchlist", "db"], default="auto")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--only-store", default=None)
     p.add_argument("--only-country", default=None)
@@ -46,18 +44,31 @@ def load_detector_config(path: str = "config.yaml") -> DetectorConfig:
     )
 
 
+def _select_products(args: argparse.Namespace, db: Database) -> list[Product]:
+    watchlist_products = load_watchlist("watchlist.yaml")
+    tags = set((args.only_tags or "").split(",")) if args.only_tags else None
+
+    if args.source == "watchlist":
+        base = watchlist_products
+    elif args.source == "db":
+        base = db.get_active_products(store=args.only_store, country=args.only_country, now_utc=utc_now())
+    else:
+        base = watchlist_products
+        if not base:
+            base = db.get_active_products(store=args.only_store, country=args.only_country, now_utc=utc_now())
+
+    return filter_products(base, args.only_store, args.only_country, tags, args.limit)
+
+
 def main() -> None:
     args = parse_args()
     log_path = setup_logging(debug=args.debug)
     LOGGER.info("starting run")
 
     run_id = str(uuid4())
-    products = load_watchlist("watchlist.yaml")
-    tags = set((args.only_tags or "").split(",")) if args.only_tags else None
-    products = filter_products(products, args.only_store, args.only_country, tags, args.limit)
-
     db = Database()
     db.init()
+    products = _select_products(args, db)
 
     stats = RunStats(run_id=run_id, total_products=len(products), started_at=utc_now())
     db.insert_run_start(run_id, stats.started_at.isoformat(), stats.total_products)
@@ -106,6 +117,7 @@ def main() -> None:
         "started_at": stats.started_at.isoformat(),
         "finished_at": stats.finished_at.isoformat(),
         "mode": args.mode,
+        "source": args.source,
         "total_products": stats.total_products,
         "snapshots_ok": stats.snapshots_ok,
         "snapshots_error": stats.snapshots_error,
@@ -113,25 +125,14 @@ def main() -> None:
         "log_file": str(log_path),
     }
 
-    json_payload = {
-        "run": run_payload,
-        "alerts": top_drops,
-        "errors_by_provider": dict(errors),
-    }
+    json_payload = {"run": run_payload, "alerts": top_drops, "errors_by_provider": dict(errors)}
     generate_json_report("reports/latest.json", json_payload)
     generate_markdown_report("reports/latest.md", run_payload, top_drops, dict(errors))
 
     if load_yaml("config.yaml").get("site_enabled", False):
         generate_site("reports/latest.json", "site")
 
-    db.update_run_end(
-        run_id,
-        stats.finished_at.isoformat(),
-        stats.snapshots_ok,
-        stats.snapshots_error,
-        stats.alerts_sent,
-        json.dumps(dict(errors)),
-    )
+    db.update_run_end(run_id, stats.finished_at.isoformat(), stats.snapshots_ok, stats.snapshots_error, stats.alerts_sent, json.dumps(dict(errors)))
     db.close()
     LOGGER.info("run completed")
 
