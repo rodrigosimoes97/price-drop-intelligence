@@ -24,6 +24,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Network smoke test (Shopee)
+        run: |
+            python - <<'PY'
+            import urllib.request, ssl
+            urls = [
+              "https://shopee.com.br/",
+              "https://shopee.com.br/search?keyword=fone%20bluetooth",
+            ]
+            for u in urls:
+              try:
+                with urllib.request.urlopen(u, timeout=20, context=ssl.create_default_context()) as r:
+                  print(u, "->", r.status)
+              except Exception as e:
+                print(u, "-> ERROR:", repr(e))
+            PY
       - name: Run discovery
         run: python -m app.discovery.run_discovery --store shopee --country BR --max-active 100
       - name: Upload artifacts
