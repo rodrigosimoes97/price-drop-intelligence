@@ -339,15 +339,7 @@ class ShopeeDiscoveryProvider(DiscoveryProvider):
         now = utc_now()
         expires = now + timedelta(hours=self.config.ttl_hours)
 
-        items, stats = self._parse_json_state(html, category, now, expires)
-        if items:
-            return items, stats
-
-        items, stats = self._parse_json_ld(html, category, now, expires)
-        if items:
-            return items, stats
-
-                items, stats = self._parse_html_cards(html, category, now, expires)
+        items, stats = self._parse_html_cards(html, category, now, expires)
         if items:
             return items, stats
 
