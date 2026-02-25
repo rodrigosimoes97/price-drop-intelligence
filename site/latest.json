@@ -1,0 +1,16 @@
+{
+  "run": {
+    "run_id": "ca3207f2-a009-41f4-89a1-ef63bb6e3dae",
+    "started_at": "2026-02-25T19:47:42.811193+00:00",
+    "finished_at": "2026-02-25T19:47:42.835244+00:00",
+    "mode": "dry",
+    "source": "db",
+    "total_products": 0,
+    "snapshots_ok": 0,
+    "snapshots_error": 0,
+    "alerts_sent": 0,
+    "log_file": "logs/run_20260225_194742.log"
+  },
+  "alerts": [],
+  "errors_by_provider": {}
+}

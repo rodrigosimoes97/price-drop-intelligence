@@ -1,0 +1,32 @@
+{
+  "run_id": "3de12ab0-f42e-4b67-9ff6-fde2ea62601f",
+  "store": "shopee",
+  "country": "BR",
+  "dry_run": true,
+  "categories": [
+    "electronics",
+    "home_kitchen",
+    "health_fitness"
+  ],
+  "collected": 0,
+  "saved": 0,
+  "inserted": 0,
+  "updated": 0,
+  "expired": 0,
+  "strategy_stats": {
+    "api_search": 0,
+    "json_state": 0,
+    "json_ld": 0,
+    "html": 0
+  },
+  "errors": [
+    "category=electronics api_error:ProxyError",
+    "category=electronics network_error:ProxyError",
+    "category=home_kitchen api_error:ProxyError",
+    "category=home_kitchen network_error:RuntimeError",
+    "category=health_fitness circuit_open",
+    "category=health_fitness network_error:RuntimeError"
+  ],
+  "log_file": "logs/discovery_20260225_194724.log",
+  "top_items": []
+}
