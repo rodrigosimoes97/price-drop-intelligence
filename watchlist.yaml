@@ -1,0 +1,40 @@
+{
+  "products": [
+    {
+      "id": "airfryer_01",
+      "country": "BR",
+      "store": "amazon",
+      "url": "https://example.com/produto/airfryer",
+      "currency": "BRL",
+      "title_hint": "Airfryer Digital 5L",
+      "tags": ["airfryer", "kitchen"],
+      "rules": {
+        "drop_percent_min": 12,
+        "cooldown_hours": 12
+      }
+    },
+    {
+      "id": "ssd_1tb_us",
+      "country": "US",
+      "store": "walmart",
+      "url": "https://example.com/product/ssd-1tb",
+      "currency": "USD",
+      "title_hint": "SSD 1TB NVMe",
+      "tags": ["storage", "pc"]
+    },
+    {
+      "id": "monitor_27_uk",
+      "country": "UK",
+      "store": "generic",
+      "url": "https://example.com/product/monitor-27",
+      "currency": "GBP",
+      "title_hint": "27 inch Monitor",
+      "tags": ["monitor", "office"],
+      "rules": {
+        "drop_amount_min": 15,
+        "min_price_threshold": 50,
+        "max_price_threshold": 2000
+      }
+    }
+  ]
+}
