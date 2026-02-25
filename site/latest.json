@@ -1,0 +1,17 @@
+{
+  "run": {
+    "run_id": "5357914b-6f37-4ab7-b30c-eff8b490aec9",
+    "started_at": "2026-02-25T14:56:53.669657+00:00",
+    "finished_at": "2026-02-25T14:56:57.336730+00:00",
+    "mode": "dry",
+    "total_products": 2,
+    "snapshots_ok": 0,
+    "snapshots_error": 2,
+    "alerts_sent": 0,
+    "log_file": "logs/run_20260225_145653.log"
+  },
+  "alerts": [],
+  "errors_by_provider": {
+    "generic_html": 2
+  }
+}
