@@ -1,25 +1,35 @@
-name: publish-dashboard
+name: Deploy Pages
 
 on:
-  workflow_dispatch:
   push:
+    branches: ["main"]
     paths:
-      - reports/latest.json
-      - site/**
+      - "site/**"
+      - "reports/latest.json"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: |
+          mkdir -p site
+          cp -f reports/latest.json site/latest.json || true
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
