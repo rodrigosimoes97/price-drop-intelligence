@@ -24,21 +24,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Network smoke test (Shopee)
+      - name: Debug Shopee API connectivity
+        if: env.DEBUG_NETWORK == 'true'
+        env:
+          DEBUG_NETWORK: ${{ vars.DEBUG_NETWORK }}
         run: |
-            python - <<'PY'
-            import urllib.request, ssl
-            urls = [
-              "https://shopee.com.br/",
-              "https://shopee.com.br/search?keyword=fone%20bluetooth",
-            ]
-            for u in urls:
-              try:
-                with urllib.request.urlopen(u, timeout=20, context=ssl.create_default_context()) as r:
-                  print(u, "->", r.status)
-              except Exception as e:
-                print(u, "-> ERROR:", repr(e))
-            PY
+          python - <<'PY'
+          import urllib.parse, urllib.request
+          keyword = urllib.parse.quote('balanca digital')
+          url = f"https://shopee.com.br/api/v4/search/search_items?by=sales&keyword={keyword}&limit=1&newest=0&order=desc&page_type=search&scenario=PAGE_GLOBAL_SEARCH&version=2"
+          req = urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0", "Accept":"application/json"})
+          with urllib.request.urlopen(req, timeout=15) as resp:
+              print(f"DEBUG Shopee API status={resp.status}")
+          PY
+
       - name: Run discovery
         run: python -m app.discovery.run_discovery --store shopee --country BR --max-active 100
       - name: Upload artifacts

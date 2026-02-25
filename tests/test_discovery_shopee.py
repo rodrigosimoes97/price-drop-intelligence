@@ -1,11 +1,11 @@
 from datetime import timedelta
 
 from app.discovery.shopee import (
-    ShopeeDiscoveryConfig,
     normalize_shopee_url,
     passes_filters,
     product_id_from,
     score_product,
+    shopee_price_to_float,
 )
 from app.models import DiscoveredProduct
 from app.utils import utc_now
@@ -45,6 +45,10 @@ def test_normalize_and_ids():
     assert product_id_from("BR", shop_id, item_id, canonical) == "shopee:BR:12345:67890"
 
 
+def test_build_product_id_from_shop_item():
+    assert product_id_from("BR", "555", "777", "https://shopee.com.br/product/555/777") == "shopee:BR:555:777"
+
+
 def test_filters_exclude_keyword_and_min_price():
     filters = {"min_price": 25.0, "exclude_keywords": ["capa"]}
     assert passes_filters(_product(title="Capa iPhone Premium"), filters) is False
@@ -56,3 +60,15 @@ def test_score_deterministic():
     p = _product(sold=1000, rating=4.9, rating_count=800)
     assert score_product(p) == score_product(p)
     assert score_product(p) > 0
+
+
+def test_price_divisor_conversion():
+    assert shopee_price_to_float(25990000) == 259.9
+
+
+def test_extract_keyword():
+    from app.discovery.shopee import ShopeeDiscoveryConfig, ShopeeDiscoveryProvider
+
+    provider = ShopeeDiscoveryProvider(ShopeeDiscoveryConfig())
+    kw = provider._extract_keyword("https://shopee.com.br/search?keyword=balan%C3%A7a%20digital&sortBy=sales")
+    assert kw == "balança digital"

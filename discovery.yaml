@@ -8,19 +8,19 @@
     "categories": [
       {
         "name": "electronics",
-        "url": "https://shopee.com.br/search?keyword=fone%20bluetooth&sortBy=sales&order=desc&page=0",
+        "url": "https://shopee.com.br/search?keyword=eletr%C3%B4nicos&sortBy=sales&order=desc",
         "tags": ["electronics"],
         "take": 40
       },
       {
         "name": "home_kitchen",
-        "url": "https://shopee.com.br/search?keyword=air%20fryer&sortBy=sales&order=desc",
+        "url": "https://shopee.com.br/search?keyword=casa%20cozinha&sortBy=sales&order=desc",
         "tags": ["home", "kitchen"],
         "take": 40
       },
       {
         "name": "health_fitness",
-        "url": "https://shopee.com.br/search?keyword=balan%C3%A7a%20digital&sortBy=sales&order=desc",
+        "url": "https://shopee.com.br/search?keyword=sa%C3%BAde%20fitness&sortBy=sales&order=desc",
         "tags": ["health", "fitness"],
         "take": 40
       }
@@ -38,7 +38,7 @@
       "retries": 3,
       "backoff_base_seconds": 1.2,
       "rate_limit_per_domain_seconds": 2.0,
-      "user_agent": "price-drop-intelligence-bot/1.0"
+      "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     },
     "affiliate": {
       "mode": "template",
