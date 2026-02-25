@@ -28,6 +28,30 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     BeautifulSoup = None
 
+from urllib.parse import parse_qs
+
+_SHOPEE_PRICE_DIVISOR = 100000  # Shopee costuma retornar preço nesse formato
+
+def _extract_keyword(url: str) -> str | None:
+    try:
+        qs = parse_qs(urlparse(url).query)
+        kw = qs.get("keyword", [None])[0]
+        return kw.strip() if kw and str(kw).strip() else None
+    except Exception:
+        return None
+
+def _safe_int(x: Any) -> int:
+    try:
+        return int(x)
+    except Exception:
+        return 0
+
+def _safe_float(x: Any) -> float | None:
+    try:
+        return float(x)
+    except Exception:
+        return None
+
 
 @dataclass(slots=True)
 class DiscoveryCategory:
@@ -154,7 +178,7 @@ class ShopeeDiscoveryProvider(DiscoveryProvider):
 
     def discover(self) -> tuple[list[DiscoveredProduct], dict[str, int], list[str]]:
         discovered: list[DiscoveredProduct] = []
-        strategy_stats = {"json_state": 0, "json_ld": 0, "html": 0}
+        strategy_stats = {"json_state": 0, "json_ld": 0, "html": 0, "api_search": 0}
         errors: list[str] = []
 
         categories = self.config.categories or []
@@ -203,6 +227,113 @@ class ShopeeDiscoveryProvider(DiscoveryProvider):
             self.breaker.record_failure(domain)
             raise
 
+        def _fetch_search_api(self, keyword: str, limit: int = 60, newest: int = 0) -> dict[str, Any]:
+        """
+        Busca itens via endpoint JSON usado pelo front do Shopee Search.
+        """
+        api = "https://shopee.com.br/api/v4/search/search_items"
+        params = {
+            "by": "sales",
+            "keyword": keyword,
+            "limit": str(limit),
+            "newest": str(newest),
+            "order": "desc",
+            "page_type": "search",
+            "scenario": "PAGE_GLOBAL_SEARCH",
+            "version": "2",
+        }
+
+        headers = {
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+            "Referer": f"https://shopee.com.br/search?keyword={keyword}",
+            # use UA "real" aqui — Shopee bloqueia UA muito “bot”
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122 Safari/537.36",
+        }
+
+        # Reusa seu rate limit + breaker
+        domain = "shopee.com.br"
+        if self.breaker.is_open(domain):
+            raise RuntimeError("circuit_open")
+        self.rate_limiter.wait(domain)
+
+        def do_req() -> dict[str, Any]:
+            if requests is None:
+                raise RuntimeError("requests_required_for_api")
+            res = requests.get(api, params=params, timeout=self.timeout, headers=headers)
+            res.raise_for_status()
+            return res.json()
+
+        try:
+            data = retry_with_backoff(do_req, retries=self.retries, base_delay=self.backoff)
+            self.breaker.record_success(domain)
+            return data
+        except Exception:
+            self.breaker.record_failure(domain)
+            raise
+
+    def _parse_search_api_items(self, data: dict[str, Any], category: DiscoveryCategory, now, expires) -> list[DiscoveredProduct]:
+        out: list[DiscoveredProduct] = []
+        items = data.get("items") or []
+        for it in items:
+            basic = (it or {}).get("item_basic") or {}
+            if not basic:
+                continue
+
+            shop_id = str(basic.get("shopid") or "") or None
+            item_id = str(basic.get("itemid") or "") or None
+            title = str(basic.get("name") or "").strip()
+            if not title:
+                continue
+
+            # preço
+            raw_price = basic.get("price") or basic.get("price_min") or basic.get("price_max")
+            price = None
+            if isinstance(raw_price, (int, float)) and raw_price > 0:
+                price = float(raw_price) / _SHOPEE_PRICE_DIVISOR
+
+            # métricas
+            sold = _safe_int(basic.get("historical_sold") or basic.get("sold") or 0)
+            rating_block = basic.get("item_rating") or {}
+            rating = _safe_float(rating_block.get("rating_star")) if isinstance(rating_block, dict) else None
+            rating_count = _safe_int(rating_block.get("rating_count") or 0) if isinstance(rating_block, dict) else 0
+
+            # url canônica (forma estável)
+            canonical = None
+            if shop_id and item_id:
+                canonical = f"https://shopee.com.br/product/{shop_id}/{item_id}"
+            else:
+                canonical, shop_id2, item_id2 = normalize_shopee_url(category.url)
+                shop_id = shop_id or shop_id2
+                item_id = item_id or item_id2
+
+            canonical, shop_idn, item_idn = normalize_shopee_url(canonical) if canonical else (category.url, shop_id, item_id)
+            pid = product_id_from(self.config.country, shop_idn, item_idn, canonical)
+
+            out.append(
+                DiscoveredProduct(
+                    id=pid,
+                    store="shopee",
+                    country=self.config.country,
+                    currency=self.config.currency,
+                    canonical_url=canonical,
+                    url=canonical,
+                    title=title[:180],
+                    tags=list(dict.fromkeys([*category.tags, "bestseller", category.name])),
+                    source=f"api_search:{category.name}",
+                    discovered_at_utc=now,
+                    expires_at_utc=expires,
+                    score=0.0,
+                    price=price,
+                    shop_id=shop_idn,
+                    item_id=item_idn,
+                    sold=sold,
+                    rating=rating,
+                    rating_count=rating_count,
+                )
+            )
+        return out
+
     def _discover_category(self, category: DiscoveryCategory) -> tuple[list[DiscoveredProduct], dict[str, int]]:
         html = self._fetch(category.url)
         now = utc_now()
@@ -216,7 +347,18 @@ class ShopeeDiscoveryProvider(DiscoveryProvider):
         if items:
             return items, stats
 
-        return self._parse_html_cards(html, category, now, expires)
+                items, stats = self._parse_html_cards(html, category, now, expires)
+        if items:
+            return items, stats
+
+        # ✅ Fallback para /search?keyword=... via API (JS-rendered pages)
+        keyword = _extract_keyword(category.url)
+        if keyword:
+            data = self._fetch_search_api(keyword=keyword, limit=max(60, category.take))
+            api_items = self._parse_search_api_items(data, category, now, expires)
+            return api_items, {"json_state": 0, "json_ld": 0, "html": 0, "api_search": len(api_items)}
+
+        return [], {"json_state": 0, "json_ld": 0, "html": 0}
 
     def _parse_json_state(self, html: str, category: DiscoveryCategory, now, expires) -> tuple[list[DiscoveredProduct], dict[str, int]]:
         candidates = re.findall(r"<script[^>]*>(\{.*?\})</script>", html, flags=re.DOTALL)
@@ -280,7 +422,7 @@ class ShopeeDiscoveryProvider(DiscoveryProvider):
                 )
             return out, {"json_state": 0, "json_ld": 0, "html": len(out)}
 
-        soup = BeautifulSoup(html, "lxml")
+        soup = BeautifulSoup(html, "html.parser")
         nodes = soup.select("a[href*='shopee.com.br'], a[href*='shopee.com']")
         for a in nodes:
             href = a.get("href")
